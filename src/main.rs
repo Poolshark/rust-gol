@@ -1,16 +1,21 @@
+use console::Term;
 use rand::Rng;
+use std::thread;
 
 #[derive(PartialEq)]
 pub enum Seed {
     Random,
     Glider,
+    Blinker,
+    Test,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum CellState {
     Dead = 0,
     Alive = 1,
 }
+
 type Grid = Vec<Cell>;
 
 type Cell = Vec<CellState>;
@@ -38,6 +43,12 @@ fn set_initial(grid: &mut Grid, seed: Seed) -> () {
         grid[2][0] = CellState::Alive;
         grid[2][1] = CellState::Alive;
         grid[2][2] = CellState::Alive;
+    } else if seed == Seed::Test {
+        grid[0][0] = CellState::Alive;
+    } else if seed == Seed::Blinker {
+        grid[0][1] = CellState::Alive;
+        grid[1][1] = CellState::Alive;
+        grid[2][1] = CellState::Alive;
     }
 }
 
@@ -60,26 +71,74 @@ fn create_grid(grid: &mut Grid, seed: Option<Seed>) -> () {
     }
 }
 
-fn check(x: &usize, y: &usize) -> Vec<usize> {
-    let mut coord: Vec<usize> = vec![0; 0];
+fn get_neighbours(grid: &Grid, x: &usize, y: &usize) -> i8 {
+    #[derive(PartialEq)]
+    enum Axis {
+        X,
+        Y,
+    }
+    fn fix_bounds(coord: i8, axis: Axis) -> usize {
+        let mut fix: usize = coord as usize;
 
-    if *x < 0 {
-        coord[0] = WIDTH + x;
-    } else if *x > WIDTH - 1 {
-        coord[0] = x - WIDTH - 1;
+        let w: i8 = WIDTH as i8;
+        let h: i8 = HEIGHT as i8;
+
+        if axis == Axis::X {
+            if coord < 0 {
+                fix = (w + coord) as usize;
+            } else if coord > w - 1 {
+                fix = (coord - w) as usize;
+            }
+        } else if axis == Axis::Y {
+            if coord < 0 {
+                fix = (h + coord) as usize;
+            } else if coord > h - 1 {
+                fix = (coord - h) as usize;
+            }
+        }
+
+        return fix;
     }
 
-    if *y < 0 {
-        coord[1] = HEIGHT + y;
-    } else if *y > HEIGHT - 1 {
-        coord[1] = y - WIDTH - 1;
+    let _x = *x as i8;
+    let _y = *y as i8;
+
+    let mut fy: usize;
+    let mut fx: usize;
+
+    let mut sum_alive: i8 = 0;
+
+    for i in -1..2 {
+        for j in -1..2 {
+            if i == 0 && j == 0 {
+                continue;
+            } else {
+                fy = fix_bounds(_y + i, Axis::Y);
+                fx = fix_bounds(_x + j, Axis::X);
+                if grid[fy][fx] == CellState::Alive {
+                    sum_alive += 1;
+                }
+            }
+        }
     }
 
-    return coord;
+    return sum_alive;
 }
 
-fn update_cell(x: &usize, y: &usize) -> i8 {
-    todo!();
+fn update_cell(old_grid: &Grid, new_grid: &mut Grid, x: &usize, y: &usize) -> () {
+    let sum = get_neighbours(&old_grid, &x, &y);
+    let curr_state = old_grid[*y][*x];
+
+    // GOL rules
+    if curr_state == CellState::Dead {
+        if sum == 3 {
+            new_grid[*y][*x] = CellState::Alive;
+        }
+    } else {
+        if sum < 2 || sum > 3 {
+            new_grid[*y][*x] = CellState::Dead;
+        }
+    }
 }
 
 fn update_grid(grid: &mut Grid) -> () {
@@ -87,17 +146,33 @@ fn update_grid(grid: &mut Grid) -> () {
 
     for i in 0..HEIGHT {
         for j in 0..WIDTH {
-            todo!();
+            update_cell(&grid, &mut new_grid, &j, &i);
         }
     }
 
     *grid = new_grid;
 }
 
+fn run(time: u64, intervall: u64, grid: &mut Grid) -> () {
+    let term = Term::stdout();
+    let mut timer = intervall;
+    print_grid(&grid);
+    thread::sleep(std::time::Duration::from_millis(intervall));
+    while timer <= time {
+        update_grid(grid);
+        term.move_cursor_up(HEIGHT).unwrap();
+        print_grid(grid);
+        thread::sleep(std::time::Duration::from_millis(intervall));
+        term.move_cursor_up(HEIGHT).unwrap();
+        timer += intervall;
+    }
+}
+
 fn main() {
+    let term = Term::stdout();
+    term.clear_screen().unwrap();
     let mut grid: Grid = vec![vec![CellState::Dead; WIDTH]; HEIGHT];
+    create_grid(&mut grid, Some(Seed::Random));
 
-    create_grid(&mut grid, None);
-
-    print_grid(&grid)
+    run(10000, 100, &mut grid);
 }
