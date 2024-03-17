@@ -170,9 +170,10 @@ fn run(time: u64, intervall: u64, grid: &mut Grid) -> () {
 
 fn main() {
     let term = Term::stdout();
+    term.hide_cursor().unwrap();
     term.clear_screen().unwrap();
     let mut grid: Grid = vec![vec![CellState::Dead; WIDTH]; HEIGHT];
     create_grid(&mut grid, Some(Seed::Random));
 
-    run(10000, 100, &mut grid);
+    run(30_000, 100, &mut grid);
 }
